@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neologic Tech Systems - Painel SaaS Multi-Tenant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { 
+                extend: { 
+                    colors: { 
+                        brand: { 500: '#10b981', 600: '#059669', 700: '#047857' },
+                        cyber: { 500: '#6366f1', 600: '#4f46e5' }
+                    } 
+                } 
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col">
+
+    <!-- NOTIFICAÇÃO / TOAST -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-[200] flex flex-col gap-3 pointer-events-none w-full max-w-sm px-4 sm:px-0"></div>
+
+    <!-- MODAL GENÉRICO DE CADASTRO / EDIÇÃO -->
+    <div id="modalGenerico" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onclick="fecharModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <h3 id="modalTitulo" class="text-xl font-bold text-emerald-400 mb-6 border-b border-slate-800 pb-3">Cadastrar</h3>
+            
+            <form id="formModal" onsubmit="salvarFormularioModal(event)" class="space-y-4">
+                <input type="hidden" id="modalTipo" value="">
+                <input type="hidden" id="editClienteId" value="">
+                
+                <div id="camposModalDinamicos" class="space-y-4">
+                    <!-- Preenchido dinamicamente via JS -->
+                </div>
+
+                <div class="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                    <button type="button" onclick="fecharModal()" class="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-800 transition">Cancelar</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2.5 rounded-xl shadow transition">Salvar Registro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CABEÇALHO DO SAAS MULTI-TENANT -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyber-600 flex items-center justify-center text-white font-black text-xl shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                <i class="fa-solid fa-cube"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                    Neologic Tech Systems <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full uppercase font-bold">Multi-Tenant v2.6</span>
+                </h1>
+                <p class="text-xs text-slate-400">Plataforma Unificada: CRM Operacional & SDR de Inteligência Artificial</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <!-- Seletor de Empresa / Tenant -->
+            <div class="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
+                <i class="fa-solid fa-building text-emerald-400 text-xs"></i>
+                <select id="tenantSelect" onchange="mudarTenantAtivo()" class="bg-transparent text-xs text-white font-semibold focus:outline-none cursor-pointer">
+                    <option value="tenant_barbearia">Barbearia Elite (Tenant #1)</option>
+                    <option value="tenant_borracharia">Borracharia 24h (Tenant #2)</option>
+                    <option value="tenant_salao">Salão Bella Vista (Tenant #3)</option>
+                </select>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">
+                NX
+            </div>
+        </div>
+    </header>
+
+    <!-- ABAS DE NAVEGAÇÃO PRINCIPAL -->
+    <div class="bg-slate-900/50 border-b border-slate-800 px-6 overflow-x-auto">
+        <div class="flex space-x-6 min-w-max">
+            <button onclick="mudarAba('crm')" id="tab-crm" class="aba-btn py-3.5 border-b-2 border-emerald-500 text-emerald-400 font-bold text-sm flex items-center gap-2.5 transition">
+                <i class="fa-solid fa-address-book text-base"></i> 1. Gestão de Clientes Ativos (CRM / ERP)
+            </button>
+            <button onclick="mudarAba('sdr')" id="tab-sdr" class="aba-btn py-3.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-bold text-sm flex items-center gap-2.5 transition">
+                <i class="fa-solid fa-robot text-base text-cyber-500"></i> 2. Captação de Leads & SDR de IA
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-grow p-6 max-w-7xl w-full mx-auto space-y-6">
+
+        <!-- ================= ABA 1: GESTÃO DE CLIENTES (CRM) ================= -->
+        <section id="sec-crm" class="space-y-6">
+            <!-- Cards de Métricas Operacionais -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                    <div class="absolute right-4 top-4 text-emerald-500/20 text-4xl"><i class="fa-solid fa-users-line"></i></div>
+                    <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Clientes Ativos na Base</span>
+                    <p id="crmTotalClientes" class="text-3xl font-extrabold text-white mt-2">0</p>
+                    <p class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-arrow-up mr-1"></i> Sincronizado com Supabase</p>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative">
+                    <div class="absolute right-4 top-4 text-slate-700 text-4xl"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                    <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Faturamento Mensal (Recorrente)</span>
+                    <p id="crmFaturamento" class="text-3xl font-extrabold text-white mt-2">R$ 0,00</p>
+                    <p class="text-[11px] text-slate-400 mt-1">Soma de mensalidades ativas</p>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative">
+                    <div class="absolute right-4 top-4 text-slate-700 text-4xl"><i class="fa-solid fa-calendar-check"></i></div>
+                    <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Ordens de Serviço Hoje</span>
+                    <p id="crmOrdensHoje" class="text-3xl font-extrabold text-white mt-2">0</p>
+                    <p class="text-[11px] text-slate-400 mt-1">Atendimentos agendados</p>
+                </div>
+            </div>
+
+            <!-- Tabela e Controles CRM -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes do Tenant
+                        </h2>
+                        <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e edição de planos</p>
+                    </div>
+                    <button onclick="abrirModalCliente()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> Novo Cliente Ativo
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-950 text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="py-3 px-4">Cliente / Contato</th>
+                                <th class="py-3 px-4">WhatsApp</th>
+                                <th class="py-3 px-4">Plano / Serviço</th>
+                                <th class="py-3 px-4">Implantação</th>
+                                <th class="py-3 px-4">Mensalidade</th>
+                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabelaClientes" class="divide-y divide-slate-800">
+                            <!-- Preenchido via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= ABA 2: CAPTAÇÃO DE LEADS & SDR DE IA ================= -->
+        <section id="sec-sdr" class="hidden space-y-6">
+            <!-- Painel de Filtros e Campanhas de IA -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-64 h-64 bg-cyber-600/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-radar text-cyber-500 animate-pulse"></i> Radar de Leads & Automação SDR (Evolution API)
+                        </h2>
+                        <p class="text-xs text-slate-400">Extraia leads locais qualificados por região e ative o Agente de IA para abordagem automática no WhatsApp</p>
+                    </div>
+                    <button onclick="abrirModalCampanha()" class="bg-cyber-600 hover:bg-cyber-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Nova Campanha de IA
+                    </button>
+                </div>
+
+                <!-- Formulário de Extração de Leads -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-slate-950 p-5 rounded-xl border border-slate-800">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">Estado (UF)</label>
+                        <select id="filtroEstado" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-500">
+                            <option value="MG">Minas Gerais (MG)</option>
+                            <option value="SP">São Paulo (SP)</option>
+                            <option value="RJ">Rio de Janeiro (RJ)</option>
+                            <option value="PR">Paraná (PR)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">Cidade Alvo</label>
+                        <input type="text" id="filtroCidade" value="Belo Horizonte" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-500">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">Nicho / Segmento</label>
+                        <input type="text" id="filtroNicho" value="Barbearias e Salões" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="executarExtracaoLeads()" class="w-full bg-gradient-to-r from-emerald-600 to-cyber-600 hover:opacity-90 text-white font-bold text-xs py-2.5 rounded-xl shadow transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-bolt"></i> Extrair Leads Locais
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Listagem de Leads Extraídos e Funil SDR -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Tabela de Leads -->
+                <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-emerald-400"></i> Leads Capturados na Região
+                        </h3>
+                        <span id="badgeTotalLeads" class="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-semibold">0 leads</span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left text-slate-300">
+                            <thead class="uppercase bg-slate-950 text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="py-3 px-3">Negócio</th>
+                                    <th class="py-3 px-3">WhatsApp</th>
+                                    <th class="py-3 px-3">Local</th>
+                                    <th class="py-3 px-3">Status Funil</th>
+                                    <th class="py-3 px-3 text-right">Ação SDR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corpoTabelaLeads" class="divide-y divide-slate-800">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Configuração da Campanha & Prompt de IA -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2 mb-4">
+                            <i class="fa-solid fa-brain text-cyber-400"></i> Agente SDR de IA (Prompt WhatsApp)
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">Campanha Ativa</label>
+                                <select id="selectCampanhaAtiva" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-500">
+                                    <option>Prospecção Ativa - Barbearias MG</option>
+                                    <option>Abordagem Rápida - Salões SP</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-400 uppercase mb-1">Instruções da IA (System Prompt)</label>
+                                <textarea id="txtPromptIA" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyber-500 leading-relaxed">Você é o Carlos, SDR especialista em tecnologia da Neologic Tech Systems. Aborde o lead de forma consultiva, pergunte sobre a dificuldade com agendamentos e ofereça uma demonstração gratuita do nosso sistema.</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-6 border-t border-slate-800 mt-4">
+                        <button onclick="dispararDisparosEmMassa()" class="w-full bg-cyber-600 hover:bg-cyber-500 text-white font-bold text-xs py-3 rounded-xl shadow-[0_0_15px_rgba(99,102,241,0.4)] transition flex items-center justify-center gap-2">
+                            <i class="fa-brands fa-whatsapp text-base"></i> Iniciar Disparos e IA (Evolution API)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SCRIPT DE GESTÃO DO SISTEMA -->
+    <script>
+        let tenantAtual = 'tenant_barbearia';
+        
+        let dadosTenant = {
+            'tenant_barbearia': {
+                clientes: [
+                    { id: 1, nome: 'Barbearia do João', tel: '(31) 98877-6655', servico: 'Sistema Completo + App', temImplantacao: true, valorImplantacao: 500, temMensalidade: true, valorMensal: 350, vencimento: 'Dia 10', status: 'Ativo' },
+                    { id: 2, nome: 'Barbearia Classic', tel: '(31) 97711-2233', servico: 'ERP Operacional', temImplantacao: false, valorImplantacao: 0, temMensalidade: true, valorMensal: 200, vencimento: 'Dia 15', status: 'Ativo' }
+                ],
+                leads: [
+                    { id: 101, negocio: 'Corte Fino Barbearia', tel: '(31) 99123-4567', cidade: 'Belo Horizonte', status: 'pendente' },
+                    { id: 102, negocio: 'Barba & Estilo', tel: '(31) 99888-7766', cidade: 'Contagem', status: 'qualificado' }
+                ]
+            },
+            'tenant_borracharia': {
+                clientes: [
+                    { id: 3, nome: 'Borracharia Express 24h', tel: '(31) 97788-9900', servico: 'Gestão de Ordens', temImplantacao: true, valorImplantacao: 300, temMensalidade: true, valorMensal: 150, vencimento: 'Dia 05', status: 'Ativo' }
+                ],
+                leads: [
+                    { id: 103, negocio: 'Auto Pneu Rodovias', tel: '(31) 98222-3344', cidade: 'Betim', status: 'pendente' }
+                ]
+            },
+            'tenant_salao': {
+                clientes: [
+                    { id: 4, nome: 'Salão Bella Vista', tel: '(11) 95544-3322', servico: 'Agendamentos WhatsApp', temImplantacao: true, valorImplantacao: 600, temMensalidade: true, valorMensal: 400, vencimento: 'Dia 20', status: 'Ativo' }
+                ],
+                leads: [
+                    { id: 104, negocio: 'Studio Hair Vip', tel: '(11) 97766-5544', cidade: 'São Paulo', status: 'respondido' }
+                ]
+            }
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            renderizarTenant();
+        });
+
+        function mostrarToast(mensagem, tipo = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            let cor = tipo === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]';
+            toast.className = `flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition transform duration-300 ${cor}`;
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-base"></i> ${mensagem}`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function mudarTenantAtivo() {
+            tenantAtual = document.getElementById('tenantSelect').value;
+            renderizarTenant();
+            mostrarToast(`Tenant alternado para: ${document.getElementById('tenantSelect').selectedOptions[0].text}`);
+        }
+
+        function mudarAba(abaId) {
+            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.aba-btn').forEach(b => {
+                b.classList.remove('border-emerald-500', 'text-emerald-400');
+                b.classList.add('border-transparent', 'text-slate-400');
+            });
+            document.getElementById(`sec-${abaId}`).classList.remove('hidden');
+            document.getElementById(`tab-${abaId}`).classList.add('border-emerald-500', 'text-emerald-400');
+            document.getElementById(`tab-${abaId}`).classList.remove('border-transparent', 'text-slate-400');
+        }
+
+        function renderizarTenant() {
+            const db = dadosTenant[tenantAtual];
+            
+            // Renderiza CRM
+            const tbodyCli = document.getElementById('corpoTabelaClientes');
+            tbodyCli.innerHTML = '';
+            
+            let faturamentoTotal = 0;
+            let totalAtivos = 0;
+
+            db.clientes.forEach(c => {
+                const isAtivo = c.status === 'Ativo';
+                if(isAtivo && c.temMensalidade) {
+                    faturamentoTotal += Number(c.valorMensal || 0);
+                }
+                if(isAtivo) totalAtivos++;
+
+                let badgeImplantacao = c.temImplantacao 
+                    ? `<span class="text-xs text-emerald-400 font-semibold">Sim (R$ ${Number(c.valorImplantacao).toFixed(2)})</span>` 
+                    : `<span class="text-xs text-slate-500">Não</span>`;
+
+                let badgeMensalidade = c.temMensalidade 
+                    ? `<span class="text-xs text-cyber-300 font-semibold">R$ ${Number(c.valorMensal).toFixed(2)} (${c.vencimento})</span>` 
+                    : `<span class="text-xs text-slate-500">Sem mensalidade</span>`;
+
+                let badgeStatus = isAtivo 
+                    ? '<span class="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Ativo</span>'
+                    : '<span class="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-red-500/10 text-red-400 border border-red-500/20">Cancelado</span>';
+
+                tbodyCli.innerHTML += `
+                    <tr class="hover:bg-slate-900 transition border-b border-slate-800/50 ${!isAtivo ? 'opacity-50' : ''}">
+                        <td class="py-3 px-4 font-semibold text-white">${c.nome}</td>
+                        <td class="py-3 px-4 text-slate-300">${c.tel}</td>
+                        <td class="py-3 px-4 text-emerald-400">${c.servico}</td>
+                        <td class="py-3 px-4">${badgeImplantacao}</td>
+                        <td class="py-3 px-4">${badgeMensalidade}</td>
+                        <td class="py-3 px-4">${badgeStatus}</td>
+                        <td class="py-3 px-4 text-right space-x-1">
+                            <button onclick="falarWhatsApp('${c.tel}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition" title="Contato WhatsApp"><i class="fa-brands fa-whatsapp text-emerald-400"></i></button>
+                            <button onclick="editarCliente(${c.id})" class="text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition" title="Editar Plano / Valores"><i class="fa-solid fa-pen-to-square"></i></button>
+                            ${isAtivo ? `<button onclick="cancelarCliente(${c.id})" class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-300 px-2.5 py-1.5 rounded-lg border border-red-500/30 transition" title="Cancelar Plano"><i class="fa-solid fa-ban"></i></button>` : `<span class="text-xs text-slate-500 italic">Encerrado</span>`}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('crmTotalClientes').innerText = totalAtivos;
+            document.getElementById('crmFaturamento').innerText = `R$ ${faturamentoTotal.toFixed(2)}`;
+            document.getElementById('crmOrdensHoje').innerText = totalAtivos * 3;
+
+            renderizarTabelaLeads();
+        }
+
+        function renderizarTabelaLeads() {
+            const db = dadosTenant[tenantAtual];
+            const tbodyLeads = document.getElementById('corpoTabelaLeads');
+            tbodyLeads.innerHTML = '';
+            
+            db.leads.forEach(l => {
+                let badgeStatus = '<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-800 text-slate-300">Pendente</span>';
+                if(l.status === 'qualificado') badgeStatus = '<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-cyber-500/20 text-cyber-300 border border-cyber-500/30">Qualificado IA</span>';
+                if(l.status === 'respondido') badgeStatus = '<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Em Conversa</span>';
+
+                tbodyLeads.innerHTML += `
+                    <tr class="hover:bg-slate-900 transition border-b border-slate-800/50">
+                        <td class="py-3 px-3 font-semibold text-white">${l.negocio}</td>
+                        <td class="py-3 px-3 text-slate-300">${l.tel}</td>
+                        <td class="py-3 px-3 text-slate-400">${l.cidade}</td>
+                        <td class="py-3 px-3">${badgeStatus}</td>
+                        <td class="py-3 px-3 text-right">
+                            <button onclick="simularDisparoIA('${l.negocio}')" class="text-xs bg-cyber-600/20 hover:bg-cyber-600/40 text-cyber-300 px-2.5 py-1 rounded-lg border border-cyber-500/30 transition"><i class="fa-solid fa-robot mr-1"></i> Acionar IA</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById('badgeTotalLeads').innerText = `${db.leads.length} leads`;
+        }
+
+        function executarExtracaoLeads() {
+            const cidade = document.getElementById('filtroCidade').value;
+            const nicho = document.getElementById('filtroNicho').value;
+            
+            mostrarToast(`Buscando novos leads de "${nicho}" em ${cidade} via Google Places API...`);
+            
+            setTimeout(() => {
+                dadosTenant[tenantAtual].leads.push(
+                    { id: Date.now(), negocio: `${nicho} Nova Era`, tel: '(31) 99444-1122', cidade: cidade, status: 'pendente' },
+                    { id: Date.now()+1, negocio: `Central do ${nicho}`, tel: '(31) 98333-5566', cidade: cidade, status: 'pendente' }
+                );
+                renderizarTabelaLeads();
+                mostrarToast("2 novos leads qualificados importados para o banco de dados!");
+            }, 1200);
+        }
+
+        function simularDisparoIA(nomeNegocio) {
+            mostrarToast(`Agente IA acionado para iniciar abordagem com "${nomeNegocio}" via Evolution API.`);
+            setTimeout(() => {
+                const lead = dadosTenant[tenantAtual].leads.find(l => l.negocio === nomeNegocio);
+                if(lead) lead.status = 'respondido';
+                renderizarTabelaLeads();
+                mostrarToast(`"${nomeNegocio}" respondeu à IA e foi qualificado!`);
+            }, 2000);
+        }
+
+        function dispararDisparosEmMassa() {
+            mostrarToast("Disparando cadência automatizada para todos os leads pendentes...");
+            setTimeout(() => {
+                dadosTenant[tenantAtual].leads.forEach(l => l.status = 'respondido');
+                renderizarTabelaLeads();
+                mostrarToast("Cadência de prospecção concluída com sucesso via Evolution API!");
+            }, 2000);
+        }
+
+        function abrirModalCliente(clienteId = null) {
+            document.getElementById('editClienteId').value = clienteId || '';
+            const db = dadosTenant[tenantAtual];
+            
+            let cli = { nome: '', tel: '', servico: 'Sistema CRM Completo', temImplantacao: true, valorImplantacao: 300, temMensalidade: true, valorMensal: 200, vencimento: 'Dia 10' };
+            
+            if(clienteId) {
+                const encontrado = db.clientes.find(c => c.id === clienteId);
+                if(encontrado) cli = encontrado;
+                document.getElementById('modalTitulo').innerText = "Editar Cliente e Plano";
+            } else {
+                document.getElementById('modalTitulo').innerText = "Cadastrar Novo Cliente Ativo";
+            }
+
+            document.getElementById('camposModalDinamicos').innerHTML = `
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Nome do Estabelecimento *</label>
+                    <input type="text" id="cliNomeInput" required value="${cli.nome}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Telefone / WhatsApp *</label>
+                    <input type="text" id="cliTelInput" required value="${cli.tel}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Plano / Serviço *</label>
+                    <input type="text" id="cliServicoInput" required value="${cli.servico}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+
+                <!-- IMPLANTAÇÃO -->
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs text-slate-300 font-bold uppercase">Serviço de Implantação?</label>
+                        <select id="selectTemImplantacao" onchange="toggleImplantacaoFields()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                            <option value="sim" ${cli.temImplantacao ? 'selected' : ''}>Sim</option>
+                            <option value="nao" ${!cli.temImplantacao ? 'selected' : ''}>Não</option>
+                        </select>
+                    </div>
+                    <div id="wrapperValorImplantacao" class="${cli.temImplantacao ? '' : 'hidden'}">
+                        <label class="block text-[11px] text-slate-400 mb-1 font-bold uppercase">Valor da Implantação (R$)</label>
+                        <input type="number" step="0.01" id="cliValorImplantacao" value="${cli.valorImplantacao || 0}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <!-- MENSALIDADE -->
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs text-slate-300 font-bold uppercase">Plano de Mensalidade?</label>
+                        <select id="selectTemMensalidade" onchange="toggleMensalidadeFields()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+                            <option value="sim" ${cli.temMensalidade ? 'selected' : ''}>Sim</option>
+                            <option value="nao" ${!cli.temMensalidade ? 'selected' : ''}>Não</option>
+                        </select>
+                    </div>
+                    <div id="wrapperMensalidadeFields" class="grid grid-cols-2 gap-3 ${cli.temMensalidade ? '' : 'hidden'}">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1 font-bold uppercase">Valor Mensal (R$)</label>
+                            <input type="number" step="0.01" id="cliValorMensal" value="${cli.valorMensal || 0}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1 font-bold uppercase">Vencimento</label>
+                            <input type="text" id="cliVencimento" placeholder="Ex: Dia 10" value="${cli.vencimento || 'Dia 10'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalGenerico').classList.remove('hidden');
+            document.getElementById('modalTipo').value = 'cliente';
+        }
+
+        function toggleImplantacaoFields() {
+            const val = document.getElementById('selectTemImplantacao').value;
+            const wrapper = document.getElementById('wrapperValorImplantacao');
+            if(val === 'sim') {
+                wrapper.classList.remove('hidden');
+            } else {
+                wrapper.classList.add('hidden');
+            }
+        }
+
+        function toggleMensalidadeFields() {
+            const val = document.getElementById('selectTemMensalidade').value;
+            const wrapper = document.getElementById('wrapperMensalidadeFields');
+            if(val === 'sim') {
+                wrapper.classList.remove('hidden');
+            } else {
+                wrapper.classList.add('hidden');
+            }
+        }
+
+        function abrirModalCampanha() {
+            document.getElementById('modalTitulo').innerText = "Nova Campanha de SDR de IA";
+            document.getElementById('camposModalDinamicos').innerHTML = `
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Nome da Campanha *</label>
+                    <input type="text" id="campNomeInput" required placeholder="Ex: Prospecção Academias SP" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyber-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Instruções para o Agente IA *</label>
+                    <textarea id="campPromptInput" rows="4" required class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-cyber-500 text-xs">Aja como um consultor comercial da Neologic...</textarea>
+                </div>
+            `;
+            document.getElementById('modalGenerico').classList.remove('hidden');
+            document.getElementById('modalTipo').value = 'campanha';
+        }
+
+        function fecharModal() {
+            document.getElementById('modalGenerico').classList.add('hidden');
+        }
+
+        function salvarFormularioModal(e) {
+            e.preventDefault();
+            const tipo = document.getElementById('modalTipo').value;
+            
+            if(tipo === 'cliente') {
+                const editId = document.getElementById('editClienteId').value;
+                const nome = document.getElementById('cliNomeInput').value;
+                const tel = document.getElementById('cliTelInput').value;
+                const servico = document.getElementById('cliServicoInput').value;
+                const temImplantacao = document.getElementById('selectTemImplantacao').value === 'sim';
+                const valorImplantacao = parseFloat(document.getElementById('cliValorImplantacao').value || 0);
+                const temMensalidade = document.getElementById('selectTemMensalidade').value === 'sim';
+                const valorMensal = parseFloat(document.getElementById('cliValorMensal').value || 0);
+                const vencimento = document.getElementById('cliVencimento').value || 'Dia 10';
+
+                const db = dadosTenant[tenantAtual];
+
+                if(editId) {
+                    // Edição
+                    const cli = db.clientes.find(c => c.id == editId);
+                    if(cli) {
+                        cli.nome = nome;
+                        cli.tel = tel;
+                        cli.servico = servico;
+                        cli.temImplantacao = temImplantacao;
+                        cli.valorImplantacao = valorImplantacao;
+                        cli.temMensalidade = temMensalidade;
+                        cli.valorMensal = valorMensal;
+                        cli.vencimento = vencimento;
+                    }
+                    mostrarToast("Plano e dados do cliente atualizados com sucesso!");
+                } else {
+                    // Novo cadastro
+                    db.clientes.push({
+                        id: Date.now(),
+                        nome,
+                        tel,
+                        servico,
+                        temImplantacao,
+                        valorImplantacao,
+                        temMensalidade,
+                        valorMensal,
+                        vencimento,
+                        status: 'Ativo'
+                    });
+                    mostrarToast("Novo cliente ativo cadastrado com sucesso!");
+                }
+                renderizarTenant();
+            } else if(tipo === 'campanha') {
+                const nome = document.getElementById('campNomeInput').value;
+                mostrarToast(`Campanha "${nome}" criada com sucesso!`);
+            }
+            fecharModal();
+        }
+
+        function editarCliente(id) {
+            abrirModalCliente(id);
+        }
+
+        function cancelarCliente(id) {
+            if(confirm("Tem certeza que deseja cancelar o plano deste cliente? O contrato será encerrado.")) {
+                const db = dadosTenant[tenantAtual];
+                const cli = db.clientes.find(c => c.id === id);
+                if(cli) {
+                    cli.status = 'Cancelado';
+                    renderizarTenant();
+                    mostrarToast("Plano do cliente cancelado com sucesso.", "error");
+                }
+            }
+        }
+
+        function falarWhatsApp(tel) {
+            window.open(`https://api.whatsapp.com/send?phone=${tel.replace(/\D/g, '')}`, '_blank');
+        }
+    </script>
+</body>
+</html>
