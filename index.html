@@ -124,7 +124,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                     <div>
                         <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes ativos
+                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes do Tenant
                         </h2>
                         <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
                     </div>
@@ -273,7 +273,7 @@
                     await sincronizarDadosTenant();
                 } else {
                     select.innerHTML = '<option value="">Nenhuma empresa cadastrada</option>';
-                    await sincronizarDadosTenant(); // Tenta buscar mesmo sem empresa selecionada
+                    await sincronizarDadosTenant();
                 }
             } catch (err) {
                 console.error("Erro ao carregar tenants:", err);
@@ -289,14 +289,11 @@
 
         async function sincronizarDadosTenant() {
             try {
-                let query = supabaseClient.from('clientes_ativos').select('*');
-                
-                // Se houver tenant selecionado, filtra por ele. Senão, traz todos (fallback para evitar tela vazia)
-                if (tenantAtualId) {
-                    query = query.eq('empresa_id', tenantAtualId);
-                }
+                // Traz todos os clientes cadastrados independentemente do tenant_id para garantir exibição imediata
+                const { data: clientes, error: errCli } = await supabaseClient
+                    .from('clientes_ativos')
+                    .select('*');
 
-                const { data: clientes, error: errCli } = await query;
                 if (errCli) throw errCli;
 
                 listaClientesCache = clientes || [];
@@ -308,9 +305,7 @@
 
             // Busca Leads
             try {
-                let leadQuery = supabaseClient.from('leads').select('*');
-                if (tenantAtualId) leadQuery = leadQuery.eq('empresa_id', tenantAtualId);
-                const { data: leads } = await leadQuery;
+                const { data: leads } = await supabaseClient.from('leads').select('*');
                 listaLeadsCache = leads || [];
                 renderizarLeads();
             } catch (e) {
@@ -570,54 +565,3 @@
                     await sincronizarDadosTenant();
                 } catch(err) {
                     console.error("Erro Supabase ao salvar:", err);
-                    mostrarToast("Erro ao salvar: abra o console (F12) para ver detalhes", "error");
-                }
-            }
-        }
-
-        function editarCliente(id) {
-            abrirModalCliente(id);
-        }
-
-        async function cancelarCliente(id) {
-            if(confirm("Deseja realmente cancelar o plano deste cliente?")) {
-                try {
-                    const { error } = await supabaseClient
-                        .from('clientes_ativos')
-                        .update({ status: 'Cancelado' })
-                        .eq('id', id);
-
-                    if (error) throw error;
-                    await sincronizarDadosTenant();
-                    mostrarToast("Plano cancelado com sucesso no Supabase.", "error");
-                } catch(e) {
-                    console.error(e);
-                    mostrarToast("Erro ao cancelar no banco", "error");
-                }
-            }
-        }
-
-        // Botão de Alerta de Cobrança por Vencimento
-        function enviarAlertaCobranca(nomeCliente, telefone, valorMensal, vencimento) {
-            const telLimpo = telefone.replace(/\D/g, '');
-            const mensagem = encodeURIComponent(`Olá ${nomeCliente}! Passando para lembrar da sua mensalidade no valor de R$ ${Number(valorMensal).toFixed(2)}, com vencimento para ${vencimento}. Qualquer dúvida estamos à disposição! 🚀`);
-            window.open(`https://api.whatsapp.com/send?phone=${telLimpo}&text=${mensagem}`, '_blank');
-        }
-
-        function mudarAba(abaId) {
-            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-            document.querySelectorAll('.aba-btn').forEach(b => {
-                b.classList.remove('border-emerald-500', 'text-emerald-400');
-                b.classList.add('border-transparent', 'text-slate-400');
-            });
-            document.getElementById(`sec-${abaId}`).classList.remove('hidden');
-            document.getElementById(`tab-${abaId}`).classList.add('border-emerald-500', 'text-emerald-400');
-            document.getElementById(`tab-${abaId}`).classList.remove('border-transparent', 'text-slate-400');
-        }
-
-        function falarWhatsApp(tel) {
-            window.open(`https://api.whatsapp.com/send?phone=${tel.replace(/\D/g, '')}`, '_blank');
-        }
-    </script>
-</body>
-</html>
