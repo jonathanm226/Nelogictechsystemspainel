@@ -124,7 +124,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                     <div>
                         <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes do Tenant
+                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes ativos
                         </h2>
                         <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
                     </div>
@@ -269,10 +269,12 @@
                         select.appendChild(opt);
                     });
                     tenantAtualId = data[0].id;
+                    select.value = tenantAtualId;
                     console.log("Tenant inicial selecionado:", tenantAtualId);
                     await sincronizarDadosTenant();
                 } else {
                     select.innerHTML = '<option value="">Nenhuma empresa cadastrada</option>';
+                    document.getElementById('corpoTabelaClientes').innerHTML = `<tr><td colspan="7" class="text-center py-6 text-amber-400">Cadastre uma empresa na tabela 'empresas' do Supabase para visualizar os clientes.</td></tr>`;
                 }
             } catch (err) {
                 console.error("Erro ao carregar tenants:", err);
@@ -290,7 +292,7 @@
         async function sincronizarDadosTenant() {
             if (!tenantAtualId) return;
 
-            // 1. Busca Clientes Ativos do Supabase para o Tenant atual com logs de diagnóstico
+            // 1. Busca Clientes Ativos do Supabase para o Tenant atual
             try {
                 console.log("Buscando clientes para empresa_id:", tenantAtualId);
                 const { data: clientes, error: errCli } = await supabaseClient
@@ -298,10 +300,7 @@
                     .select('*')
                     .eq('empresa_id', tenantAtualId);
 
-                if (errCli) {
-                    console.error("Erro retornado pelo Supabase (clientes):", errCli);
-                    throw errCli;
-                }
+                if (errCli) throw errCli;
 
                 console.log("Clientes encontrados no Supabase:", clientes);
                 listaClientesCache = clientes || [];
@@ -342,18 +341,18 @@
             }
 
             listaClientesCache.forEach(c => {
-                const isAtivo = c.status === 'Ativo';
+                const isAtivo = (c.status || 'Ativo') === 'Ativo';
                 if(isAtivo && c.tem_mensalidade) {
                     faturamentoTotal += Number(c.valor_mensal || 0);
                 }
                 if(isAtivo) totalAtivos++;
 
                 let badgeImplantacao = c.tem_implantacao 
-                    ? `<span class="text-xs text-emerald-400 font-semibold">Sim (R$ ${Number(c.valor_implantacao).toFixed(2)})</span>` 
+                    ? `<span class="text-xs text-emerald-400 font-semibold">Sim (R$ ${Number(c.valor_implantacao || 0).toFixed(2)})</span>` 
                     : `<span class="text-xs text-slate-500">Não</span>`;
 
                 let badgeMensalidade = c.tem_mensalidade 
-                    ? `<span class="text-xs text-cyber-300 font-semibold">R$ ${Number(c.valor_mensal).toFixed(2)} (${c.vencimento || 'N/A'})</span>` 
+                    ? `<span class="text-xs text-cyber-300 font-semibold">R$ ${Number(c.valor_mensal || 0).toFixed(2)} (${c.vencimento || 'N/A'})</span>` 
                     : `<span class="text-xs text-slate-500">Sem mensalidade</span>`;
 
                 let badgeStatus = isAtivo 
@@ -362,15 +361,15 @@
 
                 tbodyCli.innerHTML += `
                     <tr class="hover:bg-slate-900 transition border-b border-slate-800/50 ${!isAtivo ? 'opacity-50' : ''}">
-                        <td class="py-3 px-4 font-semibold text-white">${c.nome}</td>
-                        <td class="py-3 px-4 text-slate-300">${c.telefone}</td>
+                        <td class="py-3 px-4 font-semibold text-white">${c.nome || 'Cliente'}</td>
+                        <td class="py-3 px-4 text-slate-300">${c.telefone || '-'}</td>
                         <td class="py-3 px-4 text-emerald-400">${c.servico || 'Sistema'}</td>
                         <td class="py-3 px-4">${badgeImplantacao}</td>
                         <td class="py-3 px-4">${badgeMensalidade}</td>
                         <td class="py-3 px-4">${badgeStatus}</td>
                         <td class="py-3 px-4 text-right space-x-1">
-                            <button onclick="falarWhatsApp('${c.telefone}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition" title="Contato WhatsApp"><i class="fa-brands fa-whatsapp text-emerald-400"></i></button>
-                            <button onclick="enviarAlertaCobranca('${c.nome}', '${c.telefone}', '${c.valor_mensal || 0}', '${c.vencimento || 'vencimento'}')" class="text-xs bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition" title="Enviar Alerta de Cobrança por Vencimento"><i class="fa-solid fa-bell"></i></button>
+                            <button onclick="falarWhatsApp('${c.telefone || ''}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition" title="Contato WhatsApp"><i class="fa-brands fa-whatsapp text-emerald-400"></i></button>
+                            <button onclick="enviarAlertaCobranca('${c.nome || 'Cliente'}', '${c.telefone || ''}', '${c.valor_mensal || 0}', '${c.vencimento || 'vencimento'}')" class="text-xs bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition" title="Enviar Alerta de Cobrança por Vencimento"><i class="fa-solid fa-bell"></i></button>
                             <button onclick="editarCliente('${c.id}')" class="text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition" title="Editar Plano / Valores"><i class="fa-solid fa-pen-to-square"></i></button>
                             ${isAtivo ? `<button onclick="cancelarCliente('${c.id}')" class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-300 px-2.5 py-1.5 rounded-lg border border-red-500/30 transition" title="Cancelar Plano"><i class="fa-solid fa-ban"></i></button>` : `<span class="text-xs text-slate-500 italic">Encerrado</span>`}
                         </td>
@@ -536,6 +535,11 @@
             e.preventDefault();
             const tipo = document.getElementById('modalTipo').value;
             
+            if(!tenantAtualId) {
+                mostrarToast("Selecione ou cadastre uma empresa primeiro!", "error");
+                return;
+            }
+
             if(tipo === 'cliente') {
                 const editId = document.getElementById('editClienteId').value;
                 const nome = document.getElementById('cliNomeInput').value;
