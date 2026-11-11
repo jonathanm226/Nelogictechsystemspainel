@@ -124,7 +124,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                     <div>
                         <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes ativo
+                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes do Tenant
                         </h2>
                         <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
                     </div>
@@ -269,6 +269,7 @@
                         select.appendChild(opt);
                     });
                     tenantAtualId = data[0].id;
+                    console.log("Tenant inicial selecionado:", tenantAtualId);
                     await sincronizarDadosTenant();
                 } else {
                     select.innerHTML = '<option value="">Nenhuma empresa cadastrada</option>';
@@ -281,6 +282,7 @@
 
         async function mudarTenantAtivo() {
             tenantAtualId = document.getElementById('tenantSelect').value;
+            console.log("Tenant alterado para:", tenantAtualId);
             await sincronizarDadosTenant();
             mostrarToast("Tenant alterado e sincronizado!");
         }
@@ -288,19 +290,25 @@
         async function sincronizarDadosTenant() {
             if (!tenantAtualId) return;
 
-            // 1. Busca Clientes Ativos do Supabase para o Tenant atual
+            // 1. Busca Clientes Ativos do Supabase para o Tenant atual com logs de diagnóstico
             try {
+                console.log("Buscando clientes para empresa_id:", tenantAtualId);
                 const { data: clientes, error: errCli } = await supabaseClient
                     .from('clientes_ativos')
                     .select('*')
                     .eq('empresa_id', tenantAtualId);
 
-                if (errCli) throw errCli;
+                if (errCli) {
+                    console.error("Erro retornado pelo Supabase (clientes):", errCli);
+                    throw errCli;
+                }
+
+                console.log("Clientes encontrados no Supabase:", clientes);
                 listaClientesCache = clientes || [];
                 renderizarCRM();
             } catch (e) {
-                console.error("Erro ao buscar clientes:", e);
-                document.getElementById('corpoTabelaClientes').innerHTML = `<tr><td colspan="7" class="text-center py-6 text-red-400">Erro ao carregar clientes do banco.</td></tr>`;
+                console.error("Exceção ao buscar clientes:", e);
+                document.getElementById('corpoTabelaClientes').innerHTML = `<tr><td colspan="7" class="text-center py-6 text-red-400">Erro ao carregar clientes. Veja o console (F12).</td></tr>`;
             }
 
             // 2. Busca Leads do Supabase para o Tenant atual
@@ -570,8 +578,8 @@
                     fecharModal();
                     await sincronizarDadosTenant();
                 } catch(err) {
-                    console.error("Erro Supabase:", err);
-                    mostrarToast("Erro ao salvar: verifique o console e as colunas da tabela", "error");
+                    console.error("Erro Supabase ao salvar:", err);
+                    mostrarToast("Erro ao salvar: abra o console (F12) para ver detalhes", "error");
                 }
             }
         }
@@ -598,7 +606,7 @@
             }
         }
 
-        // Função do Botão de Alerta de Cobrança por Vencimento personalizado por cliente
+        // Botão de Alerta de Cobrança por Vencimento
         function enviarAlertaCobranca(nomeCliente, telefone, valorMensal, vencimento) {
             const telLimpo = telefone.replace(/\D/g, '');
             const mensagem = encodeURIComponent(`Olá ${nomeCliente}! Passando para lembrar da sua mensalidade no valor de R$ ${Number(valorMensal).toFixed(2)}, com vencimento para ${vencimento}. Qualquer dúvida estamos à disposição! 🚀`);
