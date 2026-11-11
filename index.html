@@ -565,3 +565,54 @@
                     await sincronizarDadosTenant();
                 } catch(err) {
                     console.error("Erro Supabase ao salvar:", err);
+                    mostrarToast("Erro ao salvar: abra o console (F12) para ver detalhes", "error");
+                }
+            }
+        }
+
+        function editarCliente(id) {
+            abrirModalCliente(id);
+        }
+
+        async function cancelarCliente(id) {
+            if(confirm("Deseja realmente cancelar o plano deste cliente?")) {
+                try {
+                    const { error } = await supabaseClient
+                        .from('clientes_ativos')
+                        .update({ status: 'Cancelado' })
+                        .eq('id', id);
+
+                    if (error) throw error;
+                    await sincronizarDadosTenant();
+                    mostrarToast("Plano cancelado com sucesso no Supabase.", "error");
+                } catch(e) {
+                    console.error(e);
+                    mostrarToast("Erro ao cancelar no banco", "error");
+                }
+            }
+        }
+
+        // Botão de Alerta de Cobrança por Vencimento personalizado por cliente
+        function enviarAlertaCobranca(nomeCliente, telefone, valorMensal, vencimento) {
+            const telLimpo = telefone.replace(/\D/g, '');
+            const mensagem = encodeURIComponent(`Olá ${nomeCliente}! Passando para lembrar da sua mensalidade no valor de R$ ${Number(valorMensal).toFixed(2)}, com vencimento para ${vencimento}. Qualquer dúvida estamos à disposição! 🚀`);
+            window.open(`https://api.whatsapp.com/send?phone=${telLimpo}&text=${mensagem}`, '_blank');
+        }
+
+        function mudarAba(abaId) {
+            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.aba-btn').forEach(b => {
+                b.classList.remove('border-emerald-500', 'text-emerald-400');
+                b.classList.add('border-transparent', 'text-slate-400');
+            });
+            document.getElementById(`sec-${abaId}`).classList.remove('hidden');
+            document.getElementById(`tab-${abaId}`).classList.add('border-emerald-500', 'text-emerald-400');
+            document.getElementById(`tab-${abaId}`).classList.remove('border-transparent', 'text-slate-400');
+        }
+
+        function falarWhatsApp(tel) {
+            window.open(`https://api.whatsapp.com/send?phone=${tel.replace(/\D/g, '')}`, '_blank');
+        }
+    </script>
+</body>
+</html>
