@@ -52,9 +52,10 @@
 
     <!-- CABEÇALHO DO SAAS MULTI-TENANT -->
     <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyber-600 flex items-center justify-center text-white font-black text-xl shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                <i class="fa-solid fa-cube"></i>
+        <div class="flex items-center gap-4">
+            <!-- LOGO NEOLOGIC (Canto Superior Esquerdo) -->
+            <div class="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center overflow-hidden border border-slate-700 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
+                <img src="3e04f6fc-1148-4cdb-9b31-12ad54d41abd.jpg" alt="Neologic Logo" class="w-full h-full object-cover">
             </div>
             <div>
                 <h1 class="text-lg font-black text-white tracking-tight flex items-center gap-2">
@@ -122,11 +123,17 @@
             <!-- Tabela e Controles CRM -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                    <div>
-                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes do Tenant
-                        </h2>
-                        <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
+                    <!-- LOGO NA CARTEIRA DE CLIENTES -->
+                    <div class="flex items-center gap-4">
+                        <div class="w-11 h-11 rounded-lg bg-slate-950 hidden sm:flex items-center justify-center border border-slate-700 overflow-hidden shadow-md">
+                            <img src="3e04f6fc-1148-4cdb-9b31-12ad54d41abd.jpg" alt="Logo Cliente" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                                Carteira de Clientes Ativos (Mensal)
+                            </h2>
+                            <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
+                        </div>
                     </div>
                     <button onclick="abrirModalCliente()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition flex items-center gap-2">
                         <i class="fa-solid fa-plus"></i> Novo Cliente Ativo
@@ -289,7 +296,7 @@
 
         async function sincronizarDadosTenant() {
             try {
-                // Traz todos os clientes cadastrados independentemente do tenant_id para garantir exibição imediata
+                // Traz todos os clientes cadastrados para garantir exibição imediata
                 const { data: clientes, error: errCli } = await supabaseClient
                     .from('clientes_ativos')
                     .select('*');
@@ -321,7 +328,7 @@
             let totalAtivos = 0;
 
             if (listaClientesCache.length === 0) {
-                tbodyCli.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500">Nenhum cliente cadastrado no Supabase.</td></tr>`;
+                tbodyCli.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500">Nenhum cliente cadastrado no Supabase. Lembre-se de rodar o código SQL para desativar o RLS!</td></tr>`;
                 document.getElementById('crmTotalClientes').innerText = 0;
                 document.getElementById('crmFaturamento').innerText = "R$ 0,00";
                 document.getElementById('crmOrdensHoje').innerText = 0;
