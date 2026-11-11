@@ -124,7 +124,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                     <div>
                         <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes ativos
+                            <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes ativo
                         </h2>
                         <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
                     </div>
@@ -300,6 +300,7 @@
                 renderizarCRM();
             } catch (e) {
                 console.error("Erro ao buscar clientes:", e);
+                document.getElementById('corpoTabelaClientes').innerHTML = `<tr><td colspan="7" class="text-center py-6 text-red-400">Erro ao carregar clientes do banco.</td></tr>`;
             }
 
             // 2. Busca Leads do Supabase para o Tenant atual
@@ -361,7 +362,7 @@
                         <td class="py-3 px-4">${badgeStatus}</td>
                         <td class="py-3 px-4 text-right space-x-1">
                             <button onclick="falarWhatsApp('${c.telefone}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition" title="Contato WhatsApp"><i class="fa-brands fa-whatsapp text-emerald-400"></i></button>
-                            <button onclick="enviarAlertaCobranca('${c.nome}', '${c.telefone}', '${c.valor_mensal || 0}', '${c.vencimento || 'vencimento'}')" class="text-xs bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition" title="Enviar Alerta de Cobrança"><i class="fa-solid fa-bell"></i></button>
+                            <button onclick="enviarAlertaCobranca('${c.nome}', '${c.telefone}', '${c.valor_mensal || 0}', '${c.vencimento || 'vencimento'}')" class="text-xs bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition" title="Enviar Alerta de Cobrança por Vencimento"><i class="fa-solid fa-bell"></i></button>
                             <button onclick="editarCliente('${c.id}')" class="text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition" title="Editar Plano / Valores"><i class="fa-solid fa-pen-to-square"></i></button>
                             ${isAtivo ? `<button onclick="cancelarCliente('${c.id}')" class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-300 px-2.5 py-1.5 rounded-lg border border-red-500/30 transition" title="Cancelar Plano"><i class="fa-solid fa-ban"></i></button>` : `<span class="text-xs text-slate-500 italic">Encerrado</span>`}
                         </td>
@@ -446,7 +447,7 @@
             let cli = { nome: '', telefone: '', servico: 'Sistema CRM Completo', tem_implantacao: true, valor_implantacao: 300, tem_mensalidade: true, valor_mensal: 200, vencimento: 'Dia 10' };
             
             if(clienteId) {
-                const encontrado = listaClientesCache.find(c => c.id === clienteId);
+                const encontrado = listaClientesCache.find(c => String(c.id) === String(clienteId));
                 if(encontrado) cli = encontrado;
                 document.getElementById('modalTitulo').innerText = "Editar Cliente e Plano";
             } else {
@@ -456,11 +457,11 @@
             document.getElementById('camposModalDinamicos').innerHTML = `
                 <div>
                     <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Nome do Estabelecimento *</label>
-                    <input type="text" id="cliNomeInput" required value="${cli.nome}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                    <input type="text" id="cliNomeInput" required value="${cli.nome || ''}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Telefone / WhatsApp *</label>
-                    <input type="text" id="cliTelInput" required value="${cli.telefone}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                    <input type="text" id="cliTelInput" required value="${cli.telefone || ''}" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1 font-bold uppercase">Plano / Serviço *</label>
@@ -569,8 +570,8 @@
                     fecharModal();
                     await sincronizarDadosTenant();
                 } catch(err) {
-                    console.error(err);
-                    mostrarToast("Erro ao salvar no Supabase (verifique colunas e RLS)", "error");
+                    console.error("Erro Supabase:", err);
+                    mostrarToast("Erro ao salvar: verifique o console e as colunas da tabela", "error");
                 }
             }
         }
@@ -597,9 +598,10 @@
             }
         }
 
+        // Função do Botão de Alerta de Cobrança por Vencimento personalizado por cliente
         function enviarAlertaCobranca(nomeCliente, telefone, valorMensal, vencimento) {
             const telLimpo = telefone.replace(/\D/g, '');
-            const mensagem = encodeURIComponent(`Olá ${nomeCliente}, passando para lembrar da sua mensalidade no valor de R$ ${Number(valorMensal).toFixed(2)}, com vencimento para ${vencimento}. Qualquer dúvida estamos à disposição! 🚀`);
+            const mensagem = encodeURIComponent(`Olá ${nomeCliente}! Passando para lembrar da sua mensalidade no valor de R$ ${Number(valorMensal).toFixed(2)}, com vencimento para ${vencimento}. Qualquer dúvida estamos à disposição! 🚀`);
             window.open(`https://api.whatsapp.com/send?phone=${telLimpo}&text=${mensagem}`, '_blank');
         }
 
