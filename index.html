@@ -270,39 +270,35 @@
                     });
                     tenantAtualId = data[0].id;
                     select.value = tenantAtualId;
-                    console.log("Tenant inicial selecionado:", tenantAtualId);
                     await sincronizarDadosTenant();
                 } else {
                     select.innerHTML = '<option value="">Nenhuma empresa cadastrada</option>';
-                    document.getElementById('corpoTabelaClientes').innerHTML = `<tr><td colspan="7" class="text-center py-6 text-amber-400">Cadastre uma empresa na tabela 'empresas' do Supabase para visualizar os clientes.</td></tr>`;
+                    await sincronizarDadosTenant(); // Tenta buscar mesmo sem empresa selecionada
                 }
             } catch (err) {
                 console.error("Erro ao carregar tenants:", err);
-                mostrarToast("Erro ao conectar com Supabase", "error");
+                await sincronizarDadosTenant();
             }
         }
 
         async function mudarTenantAtivo() {
             tenantAtualId = document.getElementById('tenantSelect').value;
-            console.log("Tenant alterado para:", tenantAtualId);
             await sincronizarDadosTenant();
             mostrarToast("Tenant alterado e sincronizado!");
         }
 
         async function sincronizarDadosTenant() {
-            if (!tenantAtualId) return;
-
-            // 1. Busca Clientes Ativos do Supabase para o Tenant atual
             try {
-                console.log("Buscando clientes para empresa_id:", tenantAtualId);
-                const { data: clientes, error: errCli } = await supabaseClient
-                    .from('clientes_ativos')
-                    .select('*')
-                    .eq('empresa_id', tenantAtualId);
+                let query = supabaseClient.from('clientes_ativos').select('*');
+                
+                // Se houver tenant selecionado, filtra por ele. Senão, traz todos (fallback para evitar tela vazia)
+                if (tenantAtualId) {
+                    query = query.eq('empresa_id', tenantAtualId);
+                }
 
+                const { data: clientes, error: errCli } = await query;
                 if (errCli) throw errCli;
 
-                console.log("Clientes encontrados no Supabase:", clientes);
                 listaClientesCache = clientes || [];
                 renderizarCRM();
             } catch (e) {
@@ -310,14 +306,11 @@
                 document.getElementById('corpoTabelaClientes').innerHTML = `<tr><td colspan="7" class="text-center py-6 text-red-400">Erro ao carregar clientes. Veja o console (F12).</td></tr>`;
             }
 
-            // 2. Busca Leads do Supabase para o Tenant atual
+            // Busca Leads
             try {
-                const { data: leads, error: errLead } = await supabaseClient
-                    .from('leads')
-                    .select('*')
-                    .eq('empresa_id', tenantAtualId);
-
-                if (errLead) throw errLead;
+                let leadQuery = supabaseClient.from('leads').select('*');
+                if (tenantAtualId) leadQuery = leadQuery.eq('empresa_id', tenantAtualId);
+                const { data: leads } = await leadQuery;
                 listaLeadsCache = leads || [];
                 renderizarLeads();
             } catch (e) {
@@ -333,7 +326,7 @@
             let totalAtivos = 0;
 
             if (listaClientesCache.length === 0) {
-                tbodyCli.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500">Nenhum cliente cadastrado para este tenant no Supabase.</td></tr>`;
+                tbodyCli.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500">Nenhum cliente cadastrado no Supabase.</td></tr>`;
                 document.getElementById('crmTotalClientes').innerText = 0;
                 document.getElementById('crmFaturamento').innerText = "R$ 0,00";
                 document.getElementById('crmOrdensHoje').innerText = 0;
@@ -411,7 +404,6 @@
         }
 
         async function executarExtracaoLeads() {
-            if (!tenantAtualId) return;
             const cidade = document.getElementById('filtroCidade').value;
             const estado = document.getElementById('filtroEstado').value;
             const nicho = document.getElementById('filtroNicho').value;
@@ -420,8 +412,8 @@
             
             try {
                 const { error } = await supabaseClient.from('leads').insert([
-                    { empresa_id: tenantAtualId, nome_negocio: `${nicho} Alfa`, telefone: '(31) 99444-1122', cidade: cidade, estado: estado, status_funil: 'pendente' },
-                    { empresa_id: tenantAtualId, nome_negocio: `Espaço ${nicho} Beta`, telefone: '(31) 98333-5566', cidade: cidade, estado: estado, status_funil: 'pendente' }
+                    { empresa_id: tenantAtualId || null, nome_negocio: `${nicho} Alfa`, telefone: '(31) 99444-1122', cidade: cidade, estado: estado, status_funil: 'pendente' },
+                    { empresa_id: tenantAtualId || null, nome_negocio: `Espaço ${nicho} Beta`, telefone: '(31) 98333-5566', cidade: cidade, estado: estado, status_funil: 'pendente' }
                 ]);
 
                 if (error) throw error;
@@ -535,11 +527,6 @@
             e.preventDefault();
             const tipo = document.getElementById('modalTipo').value;
             
-            if(!tenantAtualId) {
-                mostrarToast("Selecione ou cadastre uma empresa primeiro!", "error");
-                return;
-            }
-
             if(tipo === 'cliente') {
                 const editId = document.getElementById('editClienteId').value;
                 const nome = document.getElementById('cliNomeInput').value;
@@ -552,7 +539,7 @@
                 const vencimento = document.getElementById('cliVencimento').value || 'Dia 10';
 
                 const payload = { 
-                    empresa_id: tenantAtualId, 
+                    empresa_id: tenantAtualId || null, 
                     nome, 
                     telefone, 
                     servico, 
