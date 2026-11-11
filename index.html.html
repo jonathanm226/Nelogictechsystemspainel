@@ -126,7 +126,7 @@
                         <h2 class="text-lg font-bold text-white flex items-center gap-2">
                             <i class="fa-solid fa-table-list text-emerald-500"></i> Carteira de Clientes do Tenant
                         </h2>
-                        <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e edição de planos no Supabase</p>
+                        <p class="text-xs text-slate-400">Gerencie histórico, status financeiro, implantação, mensalidades e alertas de cobrança</p>
                     </div>
                     <button onclick="abrirModalCliente()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition flex items-center gap-2">
                         <i class="fa-solid fa-plus"></i> Novo Cliente Ativo
@@ -361,6 +361,7 @@
                         <td class="py-3 px-4">${badgeStatus}</td>
                         <td class="py-3 px-4 text-right space-x-1">
                             <button onclick="falarWhatsApp('${c.telefone}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition" title="Contato WhatsApp"><i class="fa-brands fa-whatsapp text-emerald-400"></i></button>
+                            <button onclick="enviarAlertaCobranca('${c.nome}', '${c.telefone}', '${c.valor_mensal || 0}', '${c.vencimento || 'vencimento'}')" class="text-xs bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition" title="Enviar Alerta de Cobrança"><i class="fa-solid fa-bell"></i></button>
                             <button onclick="editarCliente('${c.id}')" class="text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 transition" title="Editar Plano / Valores"><i class="fa-solid fa-pen-to-square"></i></button>
                             ${isAtivo ? `<button onclick="cancelarCliente('${c.id}')" class="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-300 px-2.5 py-1.5 rounded-lg border border-red-500/30 transition" title="Cancelar Plano"><i class="fa-solid fa-ban"></i></button>` : `<span class="text-xs text-slate-500 italic">Encerrado</span>`}
                         </td>
@@ -410,7 +411,6 @@
             mostrarToast(`Extraindo leads de "${nicho}" em ${cidade}-${estado}...`);
             
             try {
-                // Insere leads simulados direto na tabela 'leads' do Supabase para persistir
                 const { error } = await supabaseClient.from('leads').insert([
                     { empresa_id: tenantAtualId, nome_negocio: `${nicho} Alfa`, telefone: '(31) 99444-1122', cidade: cidade, estado: estado, status_funil: 'pendente' },
                     { empresa_id: tenantAtualId, nome_negocio: `Espaço ${nicho} Beta`, telefone: '(31) 98333-5566', cidade: cidade, estado: estado, status_funil: 'pendente' }
@@ -538,18 +538,31 @@
                 const valor_mensal = parseFloat(document.getElementById('cliValorMensal').value || 0);
                 const vencimento = document.getElementById('cliVencimento').value || 'Dia 10';
 
+                const payload = { 
+                    empresa_id: tenantAtualId, 
+                    nome, 
+                    telefone, 
+                    servico, 
+                    tem_implantacao, 
+                    valor_implantacao, 
+                    tem_mensalidade, 
+                    valor_mensal, 
+                    vencimento, 
+                    status: 'Ativo' 
+                };
+
                 try {
                     if(editId) {
                         const { error } = await supabaseClient
                             .from('clientes_ativos')
-                            .update({ nome, telefone, servico, tem_implantacao, valor_implantacao, tem_mensalidade, valor_mensal, vencimento })
+                            .update(payload)
                             .eq('id', editId);
                         if (error) throw error;
                         mostrarToast("Cliente atualizado no Supabase com sucesso!");
                     } else {
                         const { error } = await supabaseClient
                             .from('clientes_ativos')
-                            .insert([{ empresa_id: tenantAtualId, nome, telefone, servico, tem_implantacao, valor_implantacao, tem_mensalidade, valor_mensal, vencimento, status: 'Ativo' }]);
+                            .insert([payload]);
                         if (error) throw error;
                         mostrarToast("Novo cliente gravado no Supabase com sucesso!");
                     }
@@ -557,7 +570,7 @@
                     await sincronizarDadosTenant();
                 } catch(err) {
                     console.error(err);
-                    mostrarToast("Erro ao salvar no Supabase", "error");
+                    mostrarToast("Erro ao salvar no Supabase (verifique colunas e RLS)", "error");
                 }
             }
         }
@@ -582,6 +595,12 @@
                     mostrarToast("Erro ao cancelar no banco", "error");
                 }
             }
+        }
+
+        function enviarAlertaCobranca(nomeCliente, telefone, valorMensal, vencimento) {
+            const telLimpo = telefone.replace(/\D/g, '');
+            const mensagem = encodeURIComponent(`Olá ${nomeCliente}, passando para lembrar da sua mensalidade no valor de R$ ${Number(valorMensal).toFixed(2)}, com vencimento para ${vencimento}. Qualquer dúvida estamos à disposição! 🚀`);
+            window.open(`https://api.whatsapp.com/send?phone=${telLimpo}&text=${mensagem}`, '_blank');
         }
 
         function mudarAba(abaId) {
